@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>IdeaSpark – Random Idea Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:ital@0;1&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --card: #12121a;
+    --border: #2a2a3a;
+    --accent: #f0e040;
+    --accent2: #ff5f5f;
+    --accent3: #5ff0c8;
+    --text: #e8e8f0;
+    --muted: #666680;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 700px;
+    text-align: center;
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+  }
+
+  h1 {
+    font-size: clamp(2.5rem, 8vw, 5rem);
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.03em;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    margin-bottom: 3rem;
+  }
+
+  /* Category selector */
+  .categories {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+
+  .cat-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    padding: 8px 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .cat-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .cat-btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+
+  /* Idea Card */
+  .idea-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 2.5rem 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .idea-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent), var(--accent3));
+    transform: scaleX(0);
+    transition: transform 0.4s ease;
+    transform-origin: left;
+  }
+
+  .idea-card.revealed::after { transform: scaleX(1); }
+
+  .idea-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--accent3);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .idea-text {
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  .idea-text.show { opacity: 1; transform: translateY(0); }
+
+  .idea-number {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  /* Word pills */
+  .word-pills {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 0.5rem;
+  }
+
+  .pill {
+    padding: 4px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    border-radius: 2px;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.3s ease;
+  }
+
+  .pill.show { opacity: 1; transform: scale(1); }
+  .pill.adj { background: rgba(240,224,64,0.15); color: var(--accent); }
+  .pill.noun { background: rgba(95,240,200,0.15); color: var(--accent3); }
+  .pill.verb { background: rgba(255,95,95,0.15); color: var(--accent2); }
+
+  /* Generate Button */
+  .generate-btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    padding: 16px 40px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .generate-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.15);
+    transform: translateX(-100%);
+    transition: transform 0.2s;
+  }
+
+  .generate-btn:hover::before { transform: translateX(0); }
+  .generate-btn:active { transform: scale(0.97); }
+  .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* History */
+  .history-section {
+    margin-top: 3rem;
+    text-align: left;
+  }
+
+  .history-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .clear-btn {
+    background: none;
+    border: none;
+    color: var(--accent2);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .history-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    animation: slideIn 0.3s ease;
+  }
+
+  .history-item:hover { border-color: var(--accent); color: var(--text); }
+
+  .history-cat {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--accent3);
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* Counter */
+  .stats {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-num {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--accent);
+  }
+
+  .stat-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Copy feedback */
+  .copy-toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--accent);
+    color: #000;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    padding: 10px 20px;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .copy-toast.show { opacity: 1; transform: translateY(0); }
+
+  .idea-card:hover { border-color: var(--accent); cursor: pointer; }
+
+  .click-hint {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: -0.5rem;
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="badge">⚡ IdeaSpark v1.0</div>
+  <h1>Random <span>Idea</span><br/>Generator</h1>
+  <p class="subtitle">// pick a category → spark a new idea</p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-num" id="totalGenerated">0</div>
+      <div class="stat-label">Generated</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="totalSaved">0</div>
+      <div class="stat-label">Saved</div>
+    </div>
+  </div>
+
+  <!-- Category Buttons -->
+  <div class="categories" id="categoryBtns">
+    <button class="cat-btn active" data-cat="startup">🚀 Startup</button>
+    <button class="cat-btn" data-cat="app">📱 App</button>
+    <button class="cat-btn" data-cat="movie">🎬 Movie</button>
+    <button class="cat-btn" data-cat="game">🎮 Game</button>
+    <button class="cat-btn" data-cat="random">🎲 Surprise</button>
+  </div>
+
+  <!-- Idea Display Card -->
+  <div class="idea-card" id="ideaCard" onclick="copyIdea()" title="Click to copy">
+    <div class="idea-tag" id="ideaTag">— press generate —</div>
+    <div class="idea-text" id="ideaText">Your next big idea is one click away</div>
+    <div class="word-pills" id="wordPills"></div>
+    <div class="idea-number" id="ideaNumber">#000</div>
+  </div>
+  <p class="click-hint">📋 click card to copy idea</p>
+
+  <button class="generate-btn" id="generateBtn" onclick="generateIdea()">
+    ⚡ Generate Idea
+  </button>
+
+  <!-- History -->
+  <div class="history-section" id="historySection" style="display:none">
+    <div class="history-title">
+      <span>Recent Ideas</span>
+      <button class="clear-btn" onclick="clearHistory()">✕ Clear</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+</div>
+
+<div class="copy-toast" id="copyToast">COPIED! ✓</div>
+
+<script>
+  // ============================================================
+  // DATA — Arrays of words for each category
+  // This is the core data structure: an object with category keys
+  // Each category has adjectives, nouns, and actions
+  // ============================================================
+  const IDEAS = {
+    startup: {
+      adjectives: ["AI-powered", "Sustainable", "Hyper-local", "Decentralized", "Subscription-based", "On-demand", "Social", "Automated", "Peer-to-peer", "Smart"],
+      nouns: ["Marketplace", "Platform", "Network", "Assistant", "Community", "Hub", "Service", "Dashboard", "Ecosystem", "Tool"],
+      actions: ["for Remote Workers", "for Pet Owners", "for Freelancers", "for Students", "for Small Businesses", "for Senior Citizens", "for Travelers", "for Artists", "for Gamers", "for Foodies"]
+    },
+    app: {
+      adjectives: ["Minimalist", "Gamified", "Real-time", "Offline-first", "Voice-powered", "Collaborative", "Mood-based", "Smart", "Privacy-focused", "Dark-mode"],
+      nouns: ["Habit Tracker", "Journal", "Budget Manager", "Recipe Finder", "Sleep Analyzer", "Focus Timer", "Language Tutor", "Friend Finder", "Mood Board", "Skill Tracker"],
+      actions: ["with AI insights", "with social features", "for teams", "with daily challenges", "that learns your patterns", "with beautiful charts", "with reminders", "for families", "with streaks", "synced across devices"]
+    },
+    movie: {
+      adjectives: ["Post-apocalyptic", "Psychological", "Romantic", "Sci-fi", "Animated", "Noir", "Supernatural", "Dark-comedy", "Historical", "Cyberpunk"],
+      nouns: ["Thriller", "Drama", "Adventure", "Mystery", "Heist", "Love Story", "Survival Story", "Comedy", "Biopic", "Road Trip"],
+      actions: ["set in space", "set in ancient India", "told in reverse", "from the villain's perspective", "involving time travel", "during a pandemic", "inside a video game", "with an unreliable narrator", "set in 2050", "based on true events"]
+    },
+    game: {
+      adjectives: ["Procedurally-generated", "Multiplayer", "Pixel-art", "Open-world", "Rogue-like", "Narrative-driven", "Physics-based", "Horror", "Cozy", "Competitive"],
+      nouns: ["Dungeon Crawler", "City Builder", "Puzzle Game", "Platformer", "Strategy Game", "Simulation", "Tower Defense", "Card Game", "Racing Game", "Sandbox"],
+      actions: ["where you play as a villain", "with permadeath", "on the moon", "inside a dream", "that teaches coding", "controlled by your voice", "with no combat", "that changes daily", "where NPCs remember you", "set underwater"]
+    },
+    random: {
+      adjectives: ["Weird", "Brilliant", "Unexpected", "Controversial", "Simple yet", "Futuristic", "Retro", "Underground", "Viral", "Niche"],
+      nouns: ["Invention", "Business Idea", "Side Project", "Social Experiment", "Creative Concept", "Life Hack", "Community Project", "Micro SaaS", "Art Installation", "Bot"],
+      actions: ["nobody has tried yet", "that solves a tiny problem", "for the internet era", "you can build in a weekend", "with 10,000 potential users", "that would go viral", "worth millions", "only you could build", "that changes one habit", "the world actually needs"]
+    }
+  };
+
+  // ============================================================
+  // STATE — Variables to track app state
+  // ============================================================
+  let currentCategory = "startup";  // currently selected category
+  let generateCount = 0;            // total ideas generated
+  let history = [];                  // array to store past ideas
+
+  // ============================================================
+  // UTILITY FUNCTIONS
+  // ============================================================
+
+  // Get a random element from any array
+  function getRandom(arr) {
+    const randomIndex = Math.floor(Math.random() * arr.length);
+    return arr[randomIndex];
+  }
+
+  // Pick a random category (used for "Surprise" mode)
+  function getRandomCategory() {
+    const cats = ["startup", "app", "movie", "game"];
+    return getRandom(cats);
+  }
+
+  // ============================================================
+  // MAIN FUNCTION — Generate a new idea
+  // ============================================================
+  function generateIdea() {
+    // Disable button briefly to prevent spam
+    const btn = document.getElementById("generateBtn");
+    btn.disabled = true;
+    setTimeout(() => btn.disabled = false, 600);
+
+    // Pick the right category
+    const cat = currentCategory === "random" ? getRandomCategory() : currentCategory;
+    const data = IDEAS[cat];
+
+    // Build idea by picking random words from each array
+    const adj = getRandom(data.adjectives);
+    const noun = getRandom(data.nouns);
+    const action = getRandom(data.actions);
+    const ideaText = `${adj} ${noun} ${action}`;
+
+    // Update counter
+    generateCount++;
+    document.getElementById("totalGenerated").textContent = generateCount;
+    document.getElementById("ideaNumber").textContent = `#${String(generateCount).padStart(3, "0")}`;
+
+    // Update category tag label
+    const tagMap = { startup: "🚀 STARTUP", app: "📱 APP IDEA", movie: "🎬 MOVIE", game: "🎮 GAME", random: "🎲 RANDOM" };
+    document.getElementById("ideaTag").textContent = tagMap[cat] || cat.toUpperCase();
+
+    // Animate the idea text
+    const ideaEl = document.getElementById("ideaText");
+    ideaEl.classList.remove("show");
+
+    setTimeout(() => {
+      ideaEl.textContent = ideaText;
+      ideaEl.classList.add("show");
+    }, 100);
+
+    // Show word pills (labels for each word type)
+    const pillsContainer = document.getElementById("wordPills");
+    pillsContainer.innerHTML = "";
+
+    const pills = [
+      { word: adj, type: "adj", label: "adjective" },
+      { word: noun, type: "noun", label: "noun" },
+      { word: action, type: "verb", label: "action" }
+    ];
+
+    pills.forEach((p, i) => {
+      const pill = document.createElement("div");
+      pill.className = `pill ${p.type}`;
+      pill.textContent = p.label;
+      pill.title = p.word;
+      pillsContainer.appendChild(pill);
+
+      // Stagger animation using setTimeout
+      setTimeout(() => pill.classList.add("show"), 200 + i * 100);
+    });
+
+    // Animate card top border
+    const card = document.getElementById("ideaCard");
+    card.classList.remove("revealed");
+    setTimeout(() => card.classList.add("revealed"), 50);
+
+    // Add to history
+    addToHistory(ideaText, cat);
+  }
+
+  // ============================================================
+  // HISTORY — Keep track of generated ideas
+  // ============================================================
+  function addToHistory(idea, cat) {
+    // Add new idea at the beginning of the array (unshift = add to front)
+    history.unshift({ idea, cat });
+
+    // Keep history to max 10 items
+    if (history.length > 10) history.pop();
+
+    // Re-render the history list
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const section = document.getElementById("historySection");
+    const list = document.getElementById("historyList");
+
+    // Show section only if there are items
+    section.style.display = history.length > 0 ? "block" : "none";
+
+    // Clear and rebuild list
+    list.innerHTML = "";
+
+    history.forEach((item) => {
+      const div = document.createElement("div");
+      div.className = "history-item";
+      div.innerHTML = `<span>${item.idea}</span><span class="history-cat">${item.cat}</span>`;
+
+      // Click to set this idea as current
+      div.onclick = () => {
+        const ideaEl = document.getElementById("ideaText");
+        ideaEl.classList.remove("show");
+        setTimeout(() => {
+          ideaEl.textContent = item.idea;
+          ideaEl.classList.add("show");
+        }, 100);
+      };
+
+      list.appendChild(div);
+    });
+
+    document.getElementById("totalSaved").textContent = history.length;
+  }
+
+  function clearHistory() {
+    history = [];
+    renderHistory();
+    document.getElementById("totalSaved").textContent = 0;
+  }
+
+  // ============================================================
+  // COPY TO CLIPBOARD
+  // ============================================================
+  function copyIdea() {
+    const text = document.getElementById("ideaText").textContent;
+    if (text === "Your next big idea is one click away") return;
+
+    // Modern clipboard API
+    navigator.clipboard.writeText(text).then(() => {
+      showToast();
+    }).catch(() => {
+      // Fallback for older browsers
+      const el = document.createElement("textarea");
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      showToast();
+    });
+  }
+
+  function showToast() {
+    const toast = document.getElementById("copyToast");
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 2000);
+  }
+
+  // ============================================================
+  // CATEGORY SELECTION — Event delegation on parent element
+  // ============================================================
+  document.getElementById("categoryBtns").addEventListener("click", (e) => {
+    const btn = e.target.closest(".cat-btn");
+    if (!btn) return;
+
+    // Remove active from all buttons
+    document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+
+    // Set clicked button as active
+    btn.classList.add("active");
+
+    // Update current category
+    currentCategory = btn.dataset.cat;
+  });
+
+  // ============================================================
+  // KEYBOARD SHORTCUT — Press Space to generate
+  // ============================================================
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && e.target === document.body) {
+      e.preventDefault();
+      generateIdea();
+    }
+  });
+</script>
+</body>
+</html>
